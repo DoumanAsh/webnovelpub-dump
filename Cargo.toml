@@ -1,0 +1,37 @@
+[package]
+name = "webnovelpub-dump"
+version = "1.0.0"
+authors = ["Douman <douman@gmx.se>"]
+description = "webnovelpub dump tool"
+license = "BSL-1.0"
+edition = "2018"
+include = [
+    "**/*.rs",
+    "Cargo.toml",
+    "README.md"
+]
+keywords = ["webnovelpub"]
+
+repository = "https://github.com/DoumanAsh/webnovelpub-dump"
+documentation = "https://docs.rs/webnovelpub-dump"
+
+readme = "README.md"
+
+[dependencies.ureq]
+version = "2.5"
+default-features = false
+features = ["tls"]
+
+[dependencies.str-buf]
+version = "2"
+
+[dependencies]
+kuchiki = "0.8"
+arg = "0.3"
+c-ffi = "0.4.6"
+
+[profile.release]
+lto = 'thin'
+opt-level = "z"
+codegen-units = 1
+strip = true
