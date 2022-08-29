@@ -9,7 +9,9 @@ const CHAPTER_LIST_CONTAINER: &str = ".chapter-list";
 use kuchiki::traits::TendrilSink;
 
 fn fetch_chapter_indx(title: &str, page: u32) -> Result<Option<kuchiki::NodeRef>, String> {
-    let resp = match get(&format!("https://www.webnovelpub.com/novel/{}/chapters/page-{}", title, page)) {
+    let url = format!("https://www.webnovelpub.com/novel/{}/chapters/page-{}", title, page);
+    println!("!>>>Next chapter index={}", url);
+    let resp = match get(&url) {
         Ok(resp) => if resp.status() != 200 {
             return Err(format!("Request to chapter index got unexpected result code: {}", resp.status()));
         } else {
@@ -84,7 +86,7 @@ impl Chapter {
         };
         let novel_text = novel_text.as_node();
 
-        if let Err(error) = out.write_fmt(format_args!("## {}\n", self.title)) {
+        if let Err(error) = out.write_fmt(format_args!("## {}\n\n", self.title)) {
             return Err(WriteError::File(error));
         }
 
@@ -99,19 +101,58 @@ impl Chapter {
                         if let Some(text) = node.as_text() {
                             let text = text.borrow();
                             let text = text.trim_matches(WHITE_SPACE);
-                            if let Err(error) = out.write_all(b"\n") {
-                                return Err(WriteError::File(error));
-                            }
 
                             if !text.is_empty() {
                                 if let Err(error) = out.write_all(text.as_bytes()) {
                                     return Err(WriteError::File(error));
                                 }
-                                if let Err(error) = out.write_all(b"\n\n") {
-                                    return Err(WriteError::File(error));
+                            }
+                        } else if let Some(element) = node.into_element_ref() {
+                            if element.name.local.deref().eq_ignore_ascii_case("em") {
+                                for node in element.as_node().children() {
+                                    if let Some(text) = node.as_text() {
+                                        let text = text.borrow();
+                                        let text = text.trim_matches(WHITE_SPACE);
+
+                                        if !text.is_empty() {
+                                            if let Err(error) = out.write_all(b" *") {
+                                                return Err(WriteError::File(error));
+                                            }
+                                            if let Err(error) = out.write_all(text.as_bytes()) {
+                                                return Err(WriteError::File(error));
+                                            }
+                                            if let Err(error) = out.write_all(b"* ") {
+                                                return Err(WriteError::File(error));
+                                            }
+                                        }
+
+                                    }
+                                }
+                            } else if element.name.local.deref().eq_ignore_ascii_case("strong") {
+                                for node in element.as_node().children() {
+                                    if let Some(text) = node.as_text() {
+                                        let text = text.borrow();
+                                        let text = text.trim_matches(WHITE_SPACE);
+
+                                        if !text.is_empty() {
+                                            if let Err(error) = out.write_all(b" **") {
+                                                return Err(WriteError::File(error));
+                                            }
+                                            if let Err(error) = out.write_all(text.as_bytes()) {
+                                                return Err(WriteError::File(error));
+                                            }
+                                            if let Err(error) = out.write_all(b"** ") {
+                                                return Err(WriteError::File(error));
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        }
+                        } //node.as_element
+                    } //element.as_node().children()
+
+                    if let Err(error) = out.write_all(b"\n\n") {
+                        return Err(WriteError::File(error));
                     }
                 }
             }
