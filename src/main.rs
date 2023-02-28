@@ -8,12 +8,6 @@ mod parser;
 
 c_ffi::c_main!(rust_main);
 
-#[inline(always)]
-fn get(path: &str) -> Result<ureq::Response, ureq::Error> {
-    ureq::get(path).timeout(core::time::Duration::from_secs(5))
-                   .call()
-}
-
 fn construct_file_path(dir: &str, name: &str) -> path::PathBuf {
     let mut path = path::PathBuf::from(dir);
     path.push(name);

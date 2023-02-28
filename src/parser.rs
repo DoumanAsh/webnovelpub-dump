@@ -1,5 +1,3 @@
-use crate::get;
-
 use std::io;
 use core::fmt;
 
@@ -8,14 +6,18 @@ const CHAPTER_LIST_CONTAINER: &str = ".chapter-list";
 
 use kuchiki::traits::TendrilSink;
 
-fn fetch_chapter_indx(title: &str, page: u32) -> Result<Option<kuchiki::NodeRef>, String> {
+fn fetch_chapter_indx(client: &ureq::Agent, title: &str, page: u32) -> Result<Option<kuchiki::NodeRef>, String> {
     let url = format!("https://www.webnovelpub.com/novel/{}/chapters/page-{}", title, page);
     println!("!>>>Next chapter index={}", url);
-    let resp = match get(&url) {
-        Ok(resp) => if resp.status() != 200 {
-            return Err(format!("Request to chapter index got unexpected result code: {}", resp.status()));
-        } else {
-            resp
+    let resp = match client.get(&url).call() {
+        Ok(resp) => match resp.status() {
+            200 => resp,
+            //Redirect means no more indexes
+            300..=399 => {
+                println!("!!! Unexpected redirect found... Is this a correct novel ID?");
+                return Ok(None);
+            },
+            status => return Err(format!("Request to chapter index got unexpected result code: {}", status)),
         },
         Err(ureq::Error::Status(404, _)) => {
             return Ok(None);
@@ -54,6 +56,7 @@ impl fmt::Display for WriteError {
 pub struct Chapter {
     pub title: String,
     pub url: String,
+    http: ureq::Agent,
 }
 
 impl Chapter {
@@ -61,7 +64,7 @@ impl Chapter {
         const WHITE_SPACE: &[char] = &[' ', '\t', '\n', '　'];
         const NOVEL_BODY: &str = "#chapter-container";
 
-        let resp = match get(&format!("https://www.webnovelpub.com{}", self.url)) {
+        let resp = match self.http.get(&format!("https://www.webnovelpub.com{}", self.url)).call() {
             Ok(resp) => if resp.status() != 200 {
                 return Err(WriteError::Http(format!("{}: Reques got unexpected result code: {}", self.url, resp.status())));
             } else {
@@ -172,12 +175,15 @@ pub struct ChapterListIter {
     page_idx: u32,
     current_page: kuchiki::NodeRef,
     current_chapters: kuchiki::iter::Siblings,
+    http: ureq::Agent,
 }
 
 impl ChapterList {
     pub fn new(title: String) -> Result<Self, String> {
+        let http = ureq::builder().redirects(0).timeout(core::time::Duration::from_secs(5)).build();
+
         let page_idx = 1;
-        let current_page = match fetch_chapter_indx(&title, page_idx)? {
+        let current_page = match fetch_chapter_indx(&http, &title, page_idx)? {
             Some(page) => page,
             None => return Err("Unable fetch a first page of chapter list".to_owned()),
         };
@@ -212,6 +218,7 @@ impl ChapterList {
                 page_idx,
                 current_page,
                 current_chapters,
+                http,
             }
         })
     }
@@ -246,6 +253,7 @@ impl Iterator for ChapterListIter {
                         return Some(Chapter {
                             title,
                             url,
+                            http: self.http.clone(),
                         })
                     }
                 }
@@ -253,7 +261,7 @@ impl Iterator for ChapterListIter {
         }
         //no more chapters on current_page, so let's check next page
         self.page_idx += 1;
-        let new_page = match fetch_chapter_indx(&self.title, self.page_idx) {
+        let new_page = match fetch_chapter_indx(&self.http, &self.title, self.page_idx) {
             Ok(Some(page)) => page,
             //No more chapter lists, so we're finished
             Ok(None) => return None,
