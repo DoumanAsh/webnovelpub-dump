@@ -7,7 +7,7 @@ const CHAPTER_LIST_CONTAINER: &str = ".chapter-list";
 use kuchiki::traits::TendrilSink;
 
 fn fetch_chapter_indx(client: &ureq::Agent, title: &str, page: u32) -> Result<Option<kuchiki::NodeRef>, String> {
-    let url = format!("https://www.webnovelpub.com/novel/{}/chapters/page-{}", title, page);
+    let url = format!("https://www.webnovelpub.com/novel/{}/chapters?page={}", title, page);
     println!("!>>>Next chapter index={}", url);
     let resp = match client.get(&url).call() {
         Ok(resp) => match resp.status() {
