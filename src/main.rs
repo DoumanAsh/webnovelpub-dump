@@ -8,7 +8,18 @@ mod parser;
 
 c_ffi::c_main!(rust_main);
 
-fn construct_file_path(dir: &str, name: &str) -> path::PathBuf {
+fn construct_file_path(dir: &str, title: &str) -> path::PathBuf {
+    let mut name = String::new();
+    for ch in title.chars() {
+        if ch.is_alphanumeric() {
+            name.push(ch);
+        } else if ch.is_whitespace() {
+            name.push('_');
+        } else {
+            continue
+        }
+    }
+
     let mut path = path::PathBuf::from(dir);
     path.push(name);
     path.set_extension("md");
@@ -31,7 +42,7 @@ fn rust_main(args: c_ffi::Args) -> bool {
     };
     println!("Title: {}", chapters.proper_title);
 
-    let mut file = match fs::File::create(construct_file_path(".", &chapters.proper_title.replace(' ', "_"))) {
+    let mut file = match fs::File::create(construct_file_path(".", &chapters.proper_title)) {
         Ok(file) => io::BufWriter::new(file),
         Err(error) => {
             eprintln!("Failed to create file to store content. Error: {}", error);
