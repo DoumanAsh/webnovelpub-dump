@@ -1,5 +1,5 @@
 use std::io;
-use core::fmt;
+use core::{fmt, time};
 
 const NOVEL_TITLE_CONTAINER: &str = ".novel-item";
 const CHAPTER_LIST_CONTAINER: &str = ".chapter-list";
@@ -7,27 +7,34 @@ const CHAPTER_LIST_CONTAINER: &str = ".chapter-list";
 use kuchiki::traits::TendrilSink;
 
 fn fetch_chapter_indx(client: &ureq::Agent, title: &str, page: u32) -> Result<Option<kuchiki::NodeRef>, String> {
-    let url = format!("https://www.webnovelpub.com/novel/{}/chapters?page={}", title, page);
+    let url = format!("https://www.lightnovelworld.com/novel/{}/chapters?page={}", title, page);
     println!("!>>>Next chapter index={}", url);
-    let resp = match client.get(&url).call() {
-        Ok(resp) => match resp.status() {
-            200 => resp,
-            //Redirect means no more indexes
-            300..=399 => {
-                println!("!!! Unexpected redirect found... Is this a correct novel ID?");
+    let resp = loop {
+        match client.get(&url).call() {
+            Ok(resp) => match resp.status() {
+                200 => break resp,
+                //Redirect means no more indexes
+                300..=399 => {
+                    println!("!!! Unexpected redirect found... Is this a correct novel ID?");
+                    return Ok(None);
+                },
+                status => return Err(format!("Request to chapter index got unexpected result code: {}", status)),
+            },
+            Err(ureq::Error::Status(404, _)) => {
                 return Ok(None);
             },
-            status => return Err(format!("Request to chapter index got unexpected result code: {}", status)),
-        },
-        Err(ureq::Error::Status(404, _)) => {
-            return Ok(None);
-        },
-        Err(ureq::Error::Status(code, _)) => {
-            return Err(format!("Request to chapter index failed with code: {}", code));
-        },
-        Err(ureq::Error::Transport(_)) => {
-            return Err("www.webnovelpub.com is unreachable".to_owned());
-        },
+            Err(ureq::Error::Status(429, _)) => {
+                println!("!>Failed with status code 429. Retry in 5s...");
+                std::thread::sleep(time::Duration::from_secs(5));
+                continue;
+            }
+            Err(ureq::Error::Status(code, _)) => {
+                return Err(format!("Request to chapter index failed with code: {}", code));
+            },
+            Err(ureq::Error::Transport(_)) => {
+                return Err("www.lightnovelworld.com is unreachable".to_owned());
+            },
+        }
     };
 
     match resp.into_string() {
@@ -64,7 +71,7 @@ impl Chapter {
         const WHITE_SPACE: &[char] = &[' ', '\t', '\n', '　'];
         const NOVEL_BODY: &str = "#chapter-container";
 
-        let resp = match self.http.get(&format!("https://www.webnovelpub.com{}", self.url)).call() {
+        let resp = match self.http.get(&format!("https://www.lightnovelworld.com{}", self.url)).call() {
             Ok(resp) => if resp.status() != 200 {
                 return Err(WriteError::Http(format!("{}: Reques got unexpected result code: {}", self.url, resp.status())));
             } else {
@@ -74,7 +81,7 @@ impl Chapter {
                 return Err(WriteError::Http(format!("{}: Request failed with code: {}", self.url, code)));
             },
             Err(ureq::Error::Transport(_)) => {
-                return Err(WriteError::Http("www.webnovelpub.com is unreachable".to_owned()));
+                return Err(WriteError::Http("www.lightnovelworld.com is unreachable".to_owned()));
             },
         };
 
