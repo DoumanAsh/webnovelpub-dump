@@ -118,7 +118,8 @@ impl Chapter {
                                 }
                             }
                         } else if let Some(element) = node.into_element_ref() {
-                            if element.name.local.deref().eq_ignore_ascii_case("em") {
+                            let element_name = element.name.local.deref();
+                            if element_name.eq_ignore_ascii_case("em") || element_name.eq_ignore_ascii_case("i") {
                                 for node in element.as_node().children() {
                                     if let Some(text) = node.as_text() {
                                         let text = text.borrow();
@@ -138,7 +139,7 @@ impl Chapter {
 
                                     }
                                 }
-                            } else if element.name.local.deref().eq_ignore_ascii_case("strong") {
+                            } else if element_name.eq_ignore_ascii_case("strong") || element_name.eq_ignore_ascii_case("b") {
                                 for node in element.as_node().children() {
                                     if let Some(text) = node.as_text() {
                                         let text = text.borrow();
