@@ -6,7 +6,7 @@ const CHAPTER_LIST_CONTAINER: &str = ".chapter-list";
 
 use kuchiki::traits::TendrilSink;
 
-fn fetch_chapter_indx(client: &ureq::Agent, title: &str, page: u32) -> Result<Option<kuchiki::NodeRef>, String> {
+fn fetch_chapter_indx(client: &ureq::Agent, title: &str, page: u32, retry_delay: time::Duration) -> Result<Option<kuchiki::NodeRef>, String> {
     let url = format!("https://www.lightnovelworld.com/novel/{}/chapters?page={}", title, page);
     println!("!>>>Next chapter index={}", url);
     let resp = loop {
@@ -24,8 +24,8 @@ fn fetch_chapter_indx(client: &ureq::Agent, title: &str, page: u32) -> Result<Op
                 return Ok(None);
             },
             Err(ureq::Error::Status(429, _)) => {
-                println!("!>Failed with status code 429. Retry in 5s...");
-                std::thread::sleep(time::Duration::from_secs(5));
+                println!("!>Failed with status code 429. Retry in {}s...", retry_delay.as_secs());
+                std::thread::sleep(retry_delay);
                 continue;
             }
             Err(ureq::Error::Status(code, _)) => {
@@ -184,14 +184,15 @@ pub struct ChapterListIter {
     current_page: kuchiki::NodeRef,
     current_chapters: kuchiki::iter::Siblings,
     http: ureq::Agent,
+    retry_delay: time::Duration,
 }
 
 impl ChapterList {
-    pub fn new(title: String) -> Result<Self, String> {
+    pub fn new(title: String, retry_delay: time::Duration) -> Result<Self, String> {
         let http = ureq::builder().redirects(0).timeout(core::time::Duration::from_secs(5)).build();
 
         let page_idx = 1;
-        let current_page = match fetch_chapter_indx(&http, &title, page_idx)? {
+        let current_page = match fetch_chapter_indx(&http, &title, page_idx, retry_delay)? {
             Some(page) => page,
             None => return Err("Unable fetch a first page of chapter list".to_owned()),
         };
@@ -227,6 +228,7 @@ impl ChapterList {
                 current_page,
                 current_chapters,
                 http,
+                retry_delay,
             }
         })
     }
@@ -269,7 +271,7 @@ impl Iterator for ChapterListIter {
         }
         //no more chapters on current_page, so let's check next page
         self.page_idx += 1;
-        let new_page = match fetch_chapter_indx(&self.http, &self.title, self.page_idx) {
+        let new_page = match fetch_chapter_indx(&self.http, &self.title, self.page_idx, self.retry_delay) {
             Ok(Some(page)) => page,
             //No more chapter lists, so we're finished
             Ok(None) => return None,

@@ -33,7 +33,8 @@ fn rust_main(args: c_ffi::Args) -> bool {
         Err(code) => return code,
     };
 
-    let chapters = match parser::ChapterList::new(args.novel) {
+    let retry_delay = time::Duration::from_secs(args.retry_delay);
+    let chapters = match parser::ChapterList::new(args.novel, retry_delay) {
         Ok(chapters) => chapters,
         Err(error) => {
             eprint!("{error}");
@@ -50,7 +51,8 @@ fn rust_main(args: c_ffi::Args) -> bool {
         },
     };
 
-    if let Err(error) = io::Write::write_fmt(&mut file, format_args!("# {}\n\nOriginal: https://www.lightnovelworld.com/novel/{}\n\n", chapters.proper_title, chapters.iter.title)) {
+    let result = io::Write::write_fmt(&mut file, format_args!("# {}\n\nOriginal: https://www.lightnovelworld.com/novel/{}\n\n", chapters.proper_title, chapters.iter.title));
+    if let Err(error) = result {
         eprintln!("Unable to write file: {}", error);
         return false;
     }
@@ -63,8 +65,8 @@ fn rust_main(args: c_ffi::Args) -> bool {
                 println!("ERR\n{error}");
                 match error {
                     parser::WriteError::Http(_) => {
-                        println!("Retry in 5s...");
-                        thread::sleep(time::Duration::from_secs(5));
+                        println!("Retry in {}s...", retry_delay.as_secs());
+                        thread::sleep(retry_delay);
                         continue 'write_chapter;
                     },
                     _ => break 'chapters,

@@ -6,6 +6,9 @@ pub struct Cli {
     #[arg(required)]
     ///Id of the novel to dump (e.g. the-novels-extra-07082217)
     pub novel: String,
+    #[arg(long, default_value = "2")]
+    ///Specifies delay in seconds between attempt to download again. Defaults to 2 seconds
+    pub retry_delay: u64,
 }
 
 impl Cli {
